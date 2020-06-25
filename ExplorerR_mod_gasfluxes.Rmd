@@ -1,0 +1,47 @@
+---
+title: "Explorer R: module "gasfluxes"
+author: "Joannie D'Amours"
+date: "25/06/2020"
+output: github_document
+---
+
+Ce travail est effectué dans le cadre du cours GAA-7007 Analyse et modélisation d'agroécosystèmes. Le but de ce devoir est d'explorer les différentes plateformes qui nous ont été présentées afin de présenter un module sur R qui est d'intérêt pour nous.
+
+En effectuant une recherche avec les mots-clés "greenhouse gases" et "gasfluxes" sur la plate-forme de github, peu de résultats sont actuellement obtenus en langage R (entre 3 et 13). On trouve toutefois un "package" nommé **`gasfluxes`** dans un répertoire de Rolan Fuss: https://bitbucket.org/ecoRoland/gasfluxes/src/master/. Ce "package" semble intéressant car il permet de calculer les flux de gas à effet de serre (GES) émis par le sol à partir d'un certain nombre d'échantillons prélevés à des temps précis, à l'intérieur de chambres statiques.
+
+Cet ensemble de modules semble être "de niche" car le "package" est peu suivi sur github mais est bien référencé, a subi plusieurs améliorations et a été mis à jour récemment. On retrouve tout de même quelques suggestions et commentaires sur twitter concernant le "package" **`gasfluxes`**. Une publication récente sur le module est diffusée par le CRAN R project, pour le calcul des flux de GES: https://cran.r-project.org/web/packages/gasfluxes/gasfluxes.pdf. Le document explicatif est assez détaillé et complet. Ce document fourni les descriptions des fonctions utilisées dans **`gasfluxes`** et plusieurs exemples de codes y sont présentés. Les auteurs semblent effectuer des mises à jour assez fréquemment, la dernière datant du 28 mars 2020. Ces auteurs ont également publié un article dans la revue PLoS one en 2018, expliquant leur nouvelle approche pour le calcul des flux de GES et incluant leur procédure de décision et de visualisation dans R (Hüppi et al., 2018).
+
+De plus, **`gasfluxes`** incorpore le module **`HMR`**, lequel est également référencé par un article scientifique récemment publié dans l'European Journal of Soil Science (Pedersen et al., 2010). Un document explicatif de ce module est rendu disponible par le CRAN R project: https://cran.r-project.org/web/packages/HMR/HMR.pdf. 
+
+Le "package" offre entre autres la fonction `gasfluxes` qui permet de comparer les résultats de différentes méthodes de calcul des flux, dont la méthode HMR, mais également les méthodes "linear", "robust linear", "original HMR" et "NDFE".
+
+Un exemple d'utilisation particulièrement intéressante qui a été faite avec le "package" **`gasfluxes`** est l'application shiny créée par le "Sustainable Agroecosystem Group" situé à Zurich. Dans le cadre d'un de leurs projets, le groupe de recherche a rendu disponible une version "en direct" de l'application sur internet: https://sae-interactive-data.ethz.ch/gasflxvis/.
+
+
+## Exemple de calcul de flux
+J'ai effectué quelques essais en utilisant ce module et présente ici un exemple simple.
+Un tableau fourni dans le "package" contient des concentrations d'oxyde nitreux ainsi que différentes variables servant à calculer les flux. Tout d'abord, le module "gasfluxes" est branché. Le tableau de données provenant de 1329 chambres est inspecté.
+
+```{r}
+library("gasfluxes")
+str(fluxMeas)
+head(fluxMeas)
+```
+
+Un échantillon du tableau est extrait pour l'exemple et la fonction `gasfluxes` est appliquée. On obtient un tableau avec les résultats d'estimation des flux, leur écart type, leur p-value ainsi que d'autres détails. Ce code génère également un fichier "pics" incluant des graphiques créés pour chaque "ID" afin d'effectuer une vérification rapide des flux.
+
+```{r}
+example <- fluxMeas[1:100]
+gasfluxes(dat = example, .id = "serie", .V = "V", .A = "A", .times = "time", .C = "C", methods = c("linear", "HMR"), verbose = FALSE, plot = TRUE, maxiter = 100)
+
+```
+
+
+
+### Références
+
+Hüppi, R., Felber, R., Krauss, M., Six, J., Leifeld, J., & Fuß, R. 2018. Restricting the nonlinearity parameter in soil greenhouse gas flux calculation for more reliable flux estimates. PloS one, 13(7), e0200876.
+
+Pedersen, A.R., Petersen, S.O., Schelde, K. 2010. A comprehensive approach to soil-atmosphere trace-gas flux estimation with static chambers. European Journal of Soil Science, 61(6), 888-902.
+
+
