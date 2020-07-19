@@ -1,0 +1,128 @@
+---
+title: "Travail 5 : Séries temporelles et reproductibilité"
+author: "Joannie D'Amours"
+date: "20/07/2020"
+output: github_document
+---
+
+Les données du fichier hawai.csv comprennent les moyennes des mesures mensuelles de CO2 atmosphérique en ppm-volume collectées au Mauna Loa Observatory à Hawaii de mars 1958 à décembre 2001, inclusivement.
+Votre travail consiste à:    
+1. Créer une série temporelle du CO2 à partir des données de hawai.csv;    
+2. Séparer la série en parties d'entraînement (environ 70% des données) et en partie test;    
+3. Créer un modèle prévisionnel sur les données d'entraînement, puis projeter la prévision de CO2 atmosphérique pour comparer aux données test;    
+4. Effectuer une analyse des résidus;    
+5. Commenter: le modèle est-il fiable? Comment pourrait-il être amélioré?    
+Vous devez me remettre un lien vers un répertoire git de votre choix (GitHub, GitLab, etc.) comprenant un code reproductible de votre démarche en format R-markdown.
+
+
+Nous utiliserons les modules:
+```{r}
+library("tidyverse")
+library("lubridate")
+library("forecast")
+library("cowplot") # fonction cowplot::plot_grid() pour arranger différents graphiques ggplot2 en une grille.
+
+```
+
+## Explorer le tableau de données d'Hawai:
+```{r}
+hawai <- read_csv(file = "hawai.csv")
+
+glimpse(hawai)
+```
+
+Nous remarquons que le format des date est en décimal. Convertissons les données de temps en format date (Year-Month-Day-Hours-Minutes-Seconds).
+
+```{r}
+hawai <- hawai %>%
+  mutate(Date = date_decimal(time, tz = "UTC"))
+```
+
+Vérifier quel est le nouveau format:
+```{r}
+hawai %>% pull(Date) %>% class()
+```
+
+Voici le nouveau tableau avec des colonnes années et mois ajoutées:
+```{r}
+hawai %>%
+  mutate(Year = Date %>% year(),
+         Month = Date %>% month())
+```
+
+
+## 1. Créer une série temporelle de type `ts` ####
+
+```{r}
+hawai_ts <- ts(hawai %>% dplyr::select(-time, -Date),
+               start = c(hawai$Date[1] %>% year(), 1), # dans le vecteur date, prendre l'unité de départ, l'année, et l'unité saisonnière débute à 1
+               frequency = 12) # fréquence des données mesurées du tableau dans l'unité de départ (données mensuelles = 12 par années)
+```
+
+Explorons graphiquement les données de temps et de CO2 émis:
+
+```{r}
+autoplot(hawai_ts) + ggtitle("Hawai: Série temporelle")
+```
+
+    
+On observe une forte tendance d'augmentation de la concentration du CO2 ainsi qu'une saisonnalité (dans le sens de cycles) dans les concentrations mesurées au fil des années. Il semble qu'un cycle dure une année.
+
+
+### Autocorrélation
+Les graphiques suivants montrent qu'il y a une structure dans les données. Le graphique d'autocorrélation montre la présence d'une tendance, puisque les valeurs des coefficients d'autocorrélation sont plus élevées pour les plus petits lags et diminuent lentement au fur et à mesure que les lags augmentent. Aussi, on remarque une saisonnalité par les hausses des lags aux multiples de la fréquence saisonnière (à chaque 12 mois). Il y a une significativité dans les corrélations observées tel que représenté par les lignes pointillées bleues du graphique.
+Le lag plot montre lui aussi une forte structure dans les données.
+```{r}
+plot_grid(ggAcf(hawai_ts) + ggtitle("Hawai: Autocorrélation"),
+          gglagplot(hawai_ts) + ggtitle("Hawai: Lag plot"),
+          ncol =2)
+```
+
+Le test de Ljung-Box permet quant à lui de tester si la série temporelle entière peut être différenciée d’un bruit blanc.
+```{r}
+Box.test(hawai_ts, lag = 12, type = "Ljung-Box")
+# La probabilité que la série soit un bruit blanc est presque nulle.
+```
+
+
+## 2. Séparer la série en parties d'entraînement et en partie test
+La partie d'entraînement incluera environ 70% des données et la partie test en incluera 30%.
+```{r}
+hawai_ts_train <- window(hawai_ts, start = 1958, end = 1988.25999)
+hawai_ts_test <- window(hawai_ts, start = 1988.26, end = 2001.999)
+```
+
+
+## 3. Créer un modèle prévisionnel sur les données d'entraînement, puis projeter la prévision de CO2 atmosphérique pour comparer aux données test
+
+```{r}
+hawai_arima <- hawai_ts_train %>% auto.arima() # créer un modèle prévisionnel sur les données d'entraînement
+hawai_arima %>%
+  forecast(h = 276) %>% # projeter la prévision de CO2 sur la durée des données test et même au-delà de ces données
+  autoplot() +
+  autolayer(fitted(hawai_arima)) +
+  autolayer(hawai_ts_test, color = rgb(0, 0, 0, 0.6)) + # afficher les données test pour comparer les prévisions du modèle avec les valeurs réelles mesurées
+  labs(x = "Année", y = "CO2")
+```
+
+  Avec la fonction `auto.arima`, les paramètres (p,d,q) sont optimisés et la composante saisonnière est automatiquement détectée et optimisée avec des paramètres (P,D,Q) que l'on peut voir dans la 2e parenthèse affichée dans le titre du graphique. Ces valeurs correspondent au nombre de données utilisées pour l'évaluation du paramètre. Ces informations sont suivies de l'ordre "m" nous informant sur le cycle saisonnier, ici [12], ce qui correspond au nombre d'évènements par unité temporelle. 
+
+
+## 4. Effectuer une analyse des résidus
+
+```{r}
+checkresiduals(hawai_arima)
+```
+
+```{r}
+# Vérifier la distribution des résidus avec un test de Shapiro
+shapiro.test(residuals(hawai_arima)) # non-normal si p-value < seuil (0.05)
+```
+
+
+## 5. Commentaires sur la fiabilité du modèle et améliorations possibles
+
+```{r}
+summary(hawai_arima)
+```
+Sur le graphique d'autocorrélation illustré au point 4, les résidus ressemblent presque à une série de "bruit blanc", c'est-à-dire qu'ils ne montrent pratiquement pas d'autocorrélation, ou plus précisément celle-ci se rapproche de zéro, puisque les résidus devraient réprésenter une variation au hasard. Par contre, on observe une barre qui sort de l'intervalle de confiance: une corrélation systématique de certains résidus est apparente, ce qui pourrait être amélioré dans le modèle. De plus, on remarque que les coefficients de corrélation négatifs ont une valeur plus élevée, puisque les barres sous zéro sont plus longues. Dans l'histogramme des résidus, à première vue, les résidus semblent distribués normalement. Le test de Shapiro nous indique cependant que les résidus ne suivent pas une distribution normale. Cependant, il est à noter que ce test est particulièrement sévère. Lorsqu'on vérifie les résultats du test Ljung-Box, la probabilité que les résidus fassent partie d'un échantillon provenant d'une population de bruit blanc est assez élevée avec un p-value de 0.3725. Selon ce test, il ne semble donc pas y avoir de structure évidente dans les résidus et notre modèle serait assez valable. Les intervalles de confiance de 80% et de 95% du modèle recouvrent assez bien les données test, tel qu'observé dans le graphique du modèle prévisionnel généré par les données d'entraînement. Les prévisions des concentrations en CO2 dans le temps représentent assez bien des données test. On peut conclure que notre modèle est assez fiable malgré les petites améliorations nécessaires pour diminuer l'autocorrélation.
